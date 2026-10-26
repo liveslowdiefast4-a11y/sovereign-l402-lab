@@ -19,7 +19,7 @@ Requires Python 3.10+.
 
 The 12-test suite includes 8-worker/40-request contention, 30-thread replay, idempotency collisions, state-transition denials, malformed credentials, and synthetic preimage-hash vectors. Tests validate covered cases only.
 
-GitHub Actions runs the exact published source on Python 3.10, 3.12 and 3.13. A passing CI run is external test infrastructure, NOT a security audit or independent human attestation.
+Automatic hosted runner verification is configured in the public [GitLab pipeline](https://gitlab.com/Dan2221994/sovereign-l402-lab/-/pipelines) (Python 3.12). The GitHub Actions workflow remains manual-only because GitHub reports an account billing lock; a prior run was rejected before any steps. A successful CI run is independent compute infrastructure, NOT a security audit or human attestation.
 
 ## What this cannot do
 

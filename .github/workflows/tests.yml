@@ -1,7 +1,7 @@
+# GitHub-hosted runners are currently blocked by account billing.
+# Use GitLab hosted CI for automatic verification until resolved.
 name: Public L402 research tests
 on:
-  push:
-  pull_request:
   workflow_dispatch:
 permissions:
   contents: read
