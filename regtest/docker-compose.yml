@@ -1,0 +1,57 @@
+services:
+  bitcoind:
+    image: bitcoin/bitcoin:29.5
+    command:
+      - -regtest=1
+      - -server=1
+      - -txindex=1
+      - -fallbackfee=0.0002
+      - -rpcbind=0.0.0.0
+      - -rpcallowip=172.28.0.0/16
+      - -rpcuser=regtest
+      - -rpcpassword=regtest-only
+      - -zmqpubrawblock=tcp://0.0.0.0:28332
+      - -zmqpubrawtx=tcp://0.0.0.0:28333
+    networks: [regtest]
+    volumes: [bitcoin_data:/home/bitcoin/.bitcoin]
+
+  lnd1:
+    image: lightninglabs/lnd:v0.21.5-beta
+    command: &lnd-command
+      - --bitcoin.active
+      - --bitcoin.regtest
+      - --bitcoin.node=bitcoind
+      - --bitcoind.rpchost=bitcoind:18443
+      - --bitcoind.rpcuser=regtest
+      - --bitcoind.rpcpass=regtest-only
+      - --bitcoind.zmqpubrawblock=tcp://bitcoind:28332
+      - --bitcoind.zmqpubrawtx=tcp://bitcoind:28333
+      - --rpclisten=0.0.0.0:10009
+      - --restlisten=0.0.0.0:8080
+      - --listen=0.0.0.0:9735
+      - --noseedbackup
+      - --tlsextradomain=lnd1
+      - --tlsextradomain=lnd2
+    depends_on: [bitcoind]
+    networks: [regtest]
+    volumes: [lnd1_data:/root/.lnd]
+
+  lnd2:
+    image: lightninglabs/lnd:v0.21.5-beta
+    command: *lnd-command
+    depends_on: [bitcoind]
+    networks: [regtest]
+    volumes: [lnd2_data:/root/.lnd]
+
+networks:
+  regtest:
+    internal: true
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+volumes:
+  bitcoin_data:
+  lnd1_data:
+  lnd2_data:
+

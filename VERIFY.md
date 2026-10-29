@@ -15,7 +15,10 @@ SQLite WAL makes local reservations serializable for this fixture. The state mac
 - Local tests: repeatable scenarios only, not mathematical or production proof.
 - GitLab CI: third-party compute after a successful pipeline, not external human audit. GitHub Actions: currently blocked by billing lock.
 - Independent maintainer review: NOT YET OBTAINED.
-- Lightning regtest integration with LND/CLN: NOT YET IMPLEMENTED.
+- LND regtest integration: IMPLEMENTED AS A HARNESS; NOT VERIFIED until a commit-bound hosted job passes.
+- CLN interoperability: NOT IMPLEMENTED.
 - Production security / real settlement: NOT CLAIMED.
 
 External reviewers are invited to independently reproduce results and supply failing tests. No self-attestation should be described as outside verification.
+
+For real-node reproduction and the sanitized evidence contract, see `REGTEST.md`. A missing artifact, failed job, wrong network, missing state, duplicate state, or secret-bearing field is a failure.
