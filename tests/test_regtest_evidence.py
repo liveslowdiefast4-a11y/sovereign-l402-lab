@@ -3,7 +3,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from sovereign_l402.evidence import EvidenceError, validate_evidence
+from sovereign_l402.evidence import EvidenceError, build_evidence, validate_evidence
 
 
 class RegtestEvidenceTests(unittest.TestCase):
@@ -52,6 +52,18 @@ class RegtestEvidenceTests(unittest.TestCase):
             path = Path(directory) / "evidence.json"
             path.write_text(json.dumps(self.valid_evidence()), encoding="utf-8")
             self.assertEqual(validate_evidence(json.loads(path.read_text(encoding="utf-8"))), 6)
+
+    def test_builder_derives_pass_only_from_observed_events(self):
+        source = self.valid_evidence()
+        built = build_evidence(source["events"], commit="abc123", images={"lnd": "sha256:1"})
+        self.assertEqual(validate_evidence(built), 6)
+        self.assertEqual(built["commit"], "abc123")
+        self.assertEqual(built["images"]["lnd"], "sha256:1")
+
+    def test_builder_rejects_incomplete_observations(self):
+        events = self.valid_evidence()["events"][:-1]
+        with self.assertRaisesRegex(EvidenceError, "hold_canceled"):
+            build_evidence(events, commit="abc123", images={"lnd": "sha256:1"})
 
 
 if __name__ == "__main__":

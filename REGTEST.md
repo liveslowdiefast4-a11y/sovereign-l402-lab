@@ -14,7 +14,7 @@ This optional harness tests one private Bitcoin Core regtest and two LND nodes. 
 bash regtest/run.sh
 ```
 
-The script pulls pinned images, creates an internal network with no host ports, generates valueless regtest blocks, initializes disposable wallets, opens a private channel, runs the six required lifecycle observations, validates `regtest-evidence.json`, then removes containers and volumes even after failure.
+The script pulls pinned images, verifies the resolved image digests and regtest-only Compose configuration before wallet creation, creates an internal network with no host ports, generates valueless regtest blocks, initializes disposable wallets, opens a private channel, and records six observations only after matching LND RPC states. It also proves settle-before-accept and settle-after-cancel are rejected. The evidence builder refuses incomplete observations, and teardown verifies that project containers and volumes are gone.
 
 ## Required evidence
 
@@ -24,7 +24,7 @@ The validator accepts exactly the required semantic observations: `channel_activ
 python -m sovereign_l402.evidence regtest-evidence.json
 ```
 
-Evidence is rejected when the network is not `regtest`, the result is not `PASS`, a required state is absent/wrong/duplicated, or a secret-bearing field appears.
+Evidence is rejected when the network is not `regtest`, the result is not `PASS`, a required observed state is absent/wrong/duplicated, or a secret-bearing field appears. The report records resolved Bitcoin Core/LND image digests and Docker/Compose versions.
 
 ## Falsification targets
 

@@ -5,6 +5,7 @@ This validates a test report, not Lightning security or L402 correctness.
 
 import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 
 
@@ -56,6 +57,27 @@ def validate_evidence(evidence: dict) -> int:
         if observed.get(name) != expected:
             raise EvidenceError(f"{name} must be {expected}")
     return len(_REQUIRED)
+
+
+def build_evidence(events: list, commit: str, images: dict) -> dict:
+    """Build a PASS report only after the supplied observations validate."""
+    evidence = {
+        "schema_version": 1,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "commit": commit,
+        "network": "regtest",
+        "result": "PASS",
+        "images": images,
+        "events": events,
+        "limits": [
+            "No L402 challenge-response or macaroon verification tested",
+            "No CLN interoperability tested",
+            "No mainnet funds or production security tested",
+            "No independent human review implied",
+        ],
+    }
+    validate_evidence(evidence)
+    return evidence
 
 
 def main(argv=None) -> int:
