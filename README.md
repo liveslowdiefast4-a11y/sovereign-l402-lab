@@ -17,13 +17,15 @@ Requires Python 3.10+.
     python3 -m compileall -q sovereign_l402 tests
     python3 -m unittest discover -s tests -v
 
-The 12-test suite includes 8-worker/40-request contention, 30-thread replay, idempotency collisions, state-transition denials, malformed credentials, and synthetic preimage-hash vectors. Tests validate covered cases only.
+The 17-test local suite includes 8-worker/40-request contention, 30-thread replay, idempotency collisions, state-transition denials, malformed credentials, synthetic preimage-hash vectors, and fail-closed validation of sanitized real-node evidence. These local tests do not run LND. Tests validate covered cases only.
 
 Automatic hosted runner verification is configured in the public [GitLab pipeline](https://gitlab.com/Dan2221994/sovereign-l402-lab/-/pipelines) (Python 3.12). The GitHub Actions workflow remains manual-only because GitHub reports an account billing lock; a prior run was rejected before any steps. A successful CI run is independent compute infrastructure, NOT a security audit or human attestation.
 
+An isolated Bitcoin Core + two-LND regtest harness is under active validation. See [REGTEST.md](REGTEST.md). Its existence is not evidence that it passed: only a successful commit-bound `real-lnd-regtest` job and its validated artifact count as real-node evidence.
+
 ## What this cannot do
 
-No real LND/CLN node, live Bitcoin network, actual HTLC, BOLT11 decoding, macaroon signature/caveat verification, invoice binding, preimage custody, real settlement, or trusted payment authorization is implemented. Never grant access solely because a preimage hash matches; the L402 macaroon must be authenticated against the invoice and caveats checked.
+No live Bitcoin network, CLN interoperability, BOLT11 implementation, macaroon signature/caveat verification, L402 invoice binding, production preimage custody, mainnet settlement, or trusted payment authorization is implemented. The optional regtest harness exercises LND RPC lifecycle states only. Never grant access solely because a preimage hash matches; the L402 macaroon must be authenticated against the invoice and caveats checked.
 
 ## References and collaboration
 
