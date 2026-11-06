@@ -43,3 +43,13 @@ An end-to-end payment path needs trusted provider endpoint configuration,
 durable atomic transaction/log uniqueness, independent chain observation,
 reorg rollback handling, tenant and request-binding and live integration tests.
 No chain transaction, funds movement, lender or yield action occurs here.
+
+## Existing platform reuse candidates
+GenieOS at ~/genieos/GenieOS includes acceptance/evidence-verifier.mjs,
+commercial/verify-independent-gates.mjs, and evidence-export components.
+These are candidates for a separate evidence-analysis adapter; they are NOT
+cryptographic on-chain settlement proofs, certified external independence,
+or a trusted source for minting payment receipts until independently assessed.
+The read-only RPC adapter in sovereign_l402/rpc_client.py is intentionally
+not connected to wallet execution or customer funds. Live testnet endpoints
+were attempted from Android on 2026-11-06 but returned transport errors.
