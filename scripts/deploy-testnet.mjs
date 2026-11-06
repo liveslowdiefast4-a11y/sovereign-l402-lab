@@ -5,7 +5,7 @@ const allowed=new Map([[84532,'Base Sepolia'],[421614,'Arbitrum Sepolia']]);
 const endpoint=process.env.SOVEREIGN_TESTNET_RPC_URL;
 const secret=process.env.SOVEREIGN_TESTNET_DEPLOYER_KEY;
 const token=process.env.SOVEREIGN_TESTNET_TOKEN;
-if(!endpoint?.startsWith('https://')||!secret||!token||!process.env.SOVEREIGN_TESTNET_DEPLOY_APPROVED)
+if(!endpoint?.startsWith('https://')||!secret||!token||process.env.SOVEREIGN_TESTNET_DEPLOY_APPROVED!=='yes')
   throw Error('Missing explicit testnet RPC, deployer, token or approval flag');
 const provider=new JsonRpcProvider(endpoint,undefined,{staticNetwork:false});
 const net=await provider.getNetwork();
