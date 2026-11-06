@@ -31,3 +31,15 @@ PYTHONWARNINGS=error::ResourceWarning python3 -m unittest discover -s tests -v
 - Complete fuzzing, outage testing and 50,000+ concurrency test (not done).
 - Obtain contract security/legal reviews; lending/yield disabled by default.
 - Obtain explicit owner signoff on networks, addresses, spending and limits.
+
+## EVM settlement evidence verifier (2026-11-06)
+`sovereign_l402/evm_settlement.py` contains a pure, dependency-free
+ERC-20 transfer receipt checker intended for authenticated EVM testnet JSON-RPC.
+It checks chain ID, tx hash, successful status, token address, sender,
+recipient, exact base-unit amount, canonical block hash, and configurable
+confirmation depth. Failures deny verification. It does not yet make the
+gateway accept payments, issue settlement attestations or authorize execution.
+An end-to-end payment path needs trusted provider endpoint configuration,
+durable atomic transaction/log uniqueness, independent chain observation,
+reorg rollback handling, tenant and request-binding and live integration tests.
+No chain transaction, funds movement, lender or yield action occurs here.
