@@ -53,3 +53,14 @@ or a trusted source for minting payment receipts until independently assessed.
 The read-only RPC adapter in sovereign_l402/rpc_client.py is intentionally
 not connected to wallet execution or customer funds. Live testnet endpoints
 were attempted from Android on 2026-11-06 but returned transport errors.
+
+## Strict receipt-to-settlement pipeline (2026-11-06)
+`SettlementGateway` in `sovereign_l402/settlement_gateway.py` combines
+the existing tenant/path/body-bound signed receipt verifier, EVM transfer
+checker, and atomic SQLite replay fence. No unsigned or unmined payment claims
+are accepted; mocked end-to-end tests include duplicate, underpaid, reverted,
+wrong-chain, RPC outage, and reorg scenarios.  It is **not live settlement**:
+no production receipt issuer, verified RPC connectivity, actual testnet payment,
+distributed financial ledger, on-chain escrow, ZK execution proof, TEE or
+regulated-money permissions have been demonstrated. Customer-funds, loans and
+yield remain disabled.
