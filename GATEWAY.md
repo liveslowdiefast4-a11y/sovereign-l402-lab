@@ -64,3 +64,20 @@ no production receipt issuer, verified RPC connectivity, actual testnet payment,
 distributed financial ledger, on-chain escrow, ZK execution proof, TEE or
 regulated-money permissions have been demonstrated. Customer-funds, loans and
 yield remain disabled.
+
+## Testnet-only HTTP service
+`python3 -m sovereign_l402.settlement_server` serves the strict settlement
+gateway on **127.0.0.1:8403 only**. All configuration is explicit:
+SOVEREIGN_CHAIN_ID (84532 Base Sepolia, 421614 Arbitrum Sepolia),
+SOVEREIGN_RECEIPT_KEY (64 hex chars), SOVEREIGN_TENANT,
+SOVEREIGN_DB, SOVEREIGN_RPC_URL (HTTPS),
+SOVEREIGN_TOKEN_ADDRESS, SOVEREIGN_SENDER_ADDRESS,
+SOVEREIGN_RECIPIENT_ADDRESS, SOVEREIGN_AMOUNT_BASE_UNITS,
+and optional SOVEREIGN_MIN_CONFIRMATIONS (default 12).
+No RPC keys or wallet secrets should be committed. The server refuses
+mainnet chains, public network binding and any configured switch to enable
+customer funds, lending or yield. This implementation tests local HTTP
+handling; actual testnet token transfer verification and on-chain settlement
+are NOT yet confirmed. A production rollout also requires structured
+monitoring, a serializable distributed ledger, tenant-scoped idempotency,
+and independent observations beyond a single trusted RPC.
