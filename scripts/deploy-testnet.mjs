@@ -5,7 +5,9 @@ const allowed=new Map([[84532,'Base Sepolia'],[421614,'Arbitrum Sepolia']]);
 const endpoint=process.env.SOVEREIGN_TESTNET_RPC_URL;
 const secret=process.env.SOVEREIGN_TESTNET_DEPLOYER_KEY;
 const token=process.env.SOVEREIGN_TESTNET_TOKEN;
-if(!endpoint?.startsWith('https://')||!secret||!token||process.env.SOVEREIGN_TESTNET_DEPLOY_APPROVED!=='yes')
+const feeRecipient=process.env.SOVEREIGN_TESTNET_FEE_RECIPIENT;
+const feeBps=Number(process.env.SOVEREIGN_TESTNET_FEE_BPS);
+if(!endpoint?.startsWith('https://')||!secret||!token||!feeRecipient||!Number.isInteger(feeBps)||feeBps<10||feeBps>150||process.env.SOVEREIGN_TESTNET_DEPLOY_APPROVED!=='yes')
   throw Error('Missing explicit testnet RPC, deployer, token or approval flag');
 const provider=new JsonRpcProvider(endpoint,undefined,{staticNetwork:false});
 const net=await provider.getNetwork();
@@ -19,12 +21,13 @@ if(!/^0x[a-fA-F0-9]{40}$/.test(token) || (await provider.getCode(token))==='0x')
 const cost=await provider.getFeeData();
 if(cost.maxFeePerGas === null)throw Error('Fee estimate missing');
 const factory=new ContractFactory(artifact.abi,artifact.bytecode,wallet);
-const deployment=await factory.getDeployTransaction(token);
+if(!/^0x[a-fA-F0-9]{40}$/.test(feeRecipient))throw Error('Invalid fee recipient');
+const deployment=await factory.getDeployTransaction(token,feeRecipient,feeBps);
 const gas=await provider.estimateGas({...deployment,from:wallet.address});
 const maxWei=gas*cost.maxFeePerGas;
 const cap=BigInt(process.env.SOVEREIGN_TESTNET_MAX_GAS_WEI||'0');
 if(cap<=0n||maxWei>cap)throw Error('Gas cost exceeds explicit testnet cap');
-const escrow=await factory.deploy(token);
+const escrow=await factory.deploy(token,feeRecipient,feeBps);
 const txn=escrow.deploymentTransaction();
 const confirmation=await txn.wait(5);
 if(!confirmation||confirmation.status!==1)throw Error('Deploy not confirmed');
@@ -32,11 +35,11 @@ const address=await escrow.getAddress();
 const code=await provider.getCode(address);
 if(!code || code==='0x')throw Error('Deployed runtime bytecode missing');
 const onchainToken=await escrow.token();
-if(onchainToken.toLowerCase()!==token.toLowerCase())throw Error('Wrong constructor token');
+if(onchainToken.toLowerCase()!==token.toLowerCase() || (await escrow.feeRecipient()).toLowerCase()!==feeRecipient.toLowerCase() || Number(await escrow.feeBps())!==feeBps) throw Error('Wrong constructor config');
 const manifest={status:'TESTNET_DEPLOYED',chain_id:chain,network:allowed.get(chain),
  contract:address,transaction_hash:txn.hash,block_number:confirmation.blockNumber,
  runtime_keccak256:keccak256(code),deployer:wallet.address,
- token:onchainToken,confirmations_at_check:5,utc:new Date().toISOString(),
+ token:onchainToken,fee_recipient:feeRecipient,fee_bps:feeBps,confirmations_at_check:5,utc:new Date().toISOString(),
  caution:'No live funds, audit or ZK proof verified'};
 mkdirSync('deployments',{recursive:true});
 const path='deployments/escrow-'+chain+'-'+confirmation.blockNumber+'.json';
