@@ -24,6 +24,8 @@ class Policy:
     token: str
     treasury: str
     fee_bps: int = 50
+    escrow_contract: str | None = None
+    fee_recipient: str | None = None
     max_single_amount: int = 1_000_000_000
     max_outstanding: int = 10_000_000_000
     max_payout: int = 1_000_000_000
@@ -34,6 +36,10 @@ class Policy:
         from .evm_settlement import address
         address(self.token)
         address(self.treasury)
+        if self.escrow_contract is not None:
+            if address(self.escrow_contract)!=address(self.treasury) or self.fee_recipient is None:
+                raise FinanceDenied("escrow and fee recipient must be pinned")
+            address(self.fee_recipient)
         if type(self.fee_bps) is not int or not 10 <= self.fee_bps <= 150:
             raise FinanceDenied("invalid fee rate")
         if any(type(x) is not int or x <= 0 or x > 2**63-1 for x in
@@ -97,7 +103,7 @@ class FinancialLedger:
         digest = hashlib.sha256(_canonical({"event":event,"order":order_id,"payload":payload,"previous":prev})).hexdigest()
         db.execute("INSERT INTO journal(event,order_id,payload,prev_hash,entry_hash) VALUES(?,?,?,?,?)",
                    (event,order_id,payload,prev,digest))
-    def hold_verified(self, order_id, tenant, sender, recipient, provider, amount, tx_hash, rpc, confirmations=12):
+    def hold_verified(self, order_id, tenant, sender, recipient, provider, amount, tx_hash, rpc, confirmations=12, commitment=None):
         """Verify proof against pinned token/sender/recipient/amount before booking a liability.
 
         Pinned treasury is recipient. Caller must supply a TRUSTED RPC adapter and
@@ -112,7 +118,13 @@ class FinancialLedger:
             raise FinanceDenied("mismatched recipient or self-payment")
         try:
             expected=ExpectedPayment(self.policy.chain_id,self.policy.token,sender,recipient,amount,confirmations)
-            evidence=verify_transfer(rpc,tx_hash,expected)
+            if self.policy.escrow_contract is not None:
+                from .escrow_evm import verify_funded_order
+                evidence=verify_funded_order(
+                    rpc,tx_hash,expected,escrow=self.policy.escrow_contract,
+                    order_id=order_id,payer=sender,provider=provider,commitment=commitment)
+            else:
+                evidence=verify_transfer(rpc,tx_hash,expected)
         except (SettlementDenied, TypeError) as exc:
             raise FinanceDenied("settlement evidence rejected") from exc
         # Fee is floor in token base units; integers only, no floating point.
@@ -193,7 +205,15 @@ class FinancialLedger:
         try:
             expected=ExpectedPayment(self.policy.chain_id,self.policy.token,self.policy.treasury,
                                      destination,due,confirmations)
-            evidence=verify_transfer(rpc,payout_tx_hash,expected)
+            if self.policy.escrow_contract is not None:
+                from .escrow_evm import verify_escrow_payout
+                evidence=verify_escrow_payout(
+                    rpc,payout_tx_hash,expected,escrow=self.policy.escrow_contract,
+                    order_id=order_id,refunded=(status=="REFUND_PENDING"),
+                    fee_recipient=self.policy.fee_recipient,
+                    fee_amount=0 if status=="REFUND_PENDING" else amount-liability)
+            else:
+                evidence=verify_transfer(rpc,payout_tx_hash,expected)
         except (SettlementDenied,TypeError) as exc:
             raise FinanceDenied("payout settlement not verified") from exc
         completed="REFUNDED" if status=="REFUND_PENDING" else "RELEASED"

@@ -107,5 +107,10 @@ class FinancialTests(unittest.TestCase):
             self.ledger.request_disbursement("order-001",PAYER,"x"*24)
     def test_fee_below_ten_bps_blocked(self):
         with self.assertRaises(FinanceDenied): Policy(84532,TOKEN,TREASURY,0)
+    def test_strict_escrow_requires_event(self):
+        self.ledger=FinancialLedger(self.ledger.path,
+             Policy(84532,TOKEN,TREASURY,100,escrow_contract=TREASURY,fee_recipient=PROVIDER))
+        with self.assertRaises(FinanceDenied):
+            self.hold(order_id="0x"+"ab"*32,commitment="0x"+"99"*32)
     def test_mainnet_disallowed(self):
         with self.assertRaises(FinanceDenied):Policy(8453,TOKEN,TREASURY)

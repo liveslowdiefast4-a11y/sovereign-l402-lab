@@ -7,3 +7,7 @@ __pycache__/
 *.db-wal
 .env
 .env.*
+artifacts/
+deployments/
+node_modules/
+zk-build/

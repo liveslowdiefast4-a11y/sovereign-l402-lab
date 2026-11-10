@@ -18,10 +18,12 @@ contract SovereignEscrow {
         bytes32 commitment;
     }
     IERC20Sovereign public immutable token;
+    address public immutable feeRecipient;
+    uint16 public immutable feeBps;
     mapping(bytes32 => Order) public orders;
     uint256 private gate = 1;
     event Funded(bytes32 indexed orderId, address indexed payer, address indexed provider, uint256 amount, uint64 expires, bytes32 commitment);
-    event Released(bytes32 indexed orderId, uint256 amount);
+    event Released(bytes32 indexed orderId, uint256 providerAmount, uint256 feeAmount);
     event Refunded(bytes32 indexed orderId, uint256 amount);
     error Invalid();
     error Unauthorized();
@@ -34,9 +36,12 @@ contract SovereignEscrow {
         _;
         gate = 1;
     }
-    constructor(address token_) {
-        if (token_ == address(0) || token_.code.length == 0) revert Invalid();
+    constructor(address token_, address feeRecipient_, uint16 feeBps_) {
+        if (token_ == address(0) || token_.code.length == 0 ||
+            feeRecipient_ == address(0) || feeBps_ < 10 || feeBps_ > 150) revert Invalid();
         token = IERC20Sovereign(token_);
+        feeRecipient = feeRecipient_;
+        feeBps = feeBps_;
     }
     function fund(bytes32 orderId, address provider, uint128 amount, uint64 expires, bytes32 commitment)
         external nonReentrant
@@ -59,8 +64,13 @@ contract SovereignEscrow {
         if (msg.sender != order.payer) revert Unauthorized();
         if (evidenceHash != order.commitment) revert Invalid();
         order.state = State.Released;
-        _callOptional(abi.encodeCall(IERC20Sovereign.transfer, (order.provider, uint256(order.amount))));
-        emit Released(orderId, order.amount);
+        uint256 fee = uint256(order.amount) * feeBps / 10000;
+        uint256 net = uint256(order.amount) - fee;
+        _callOptional(abi.encodeCall(IERC20Sovereign.transfer, (order.provider, net)));
+        if (fee != 0) {
+            _callOptional(abi.encodeCall(IERC20Sovereign.transfer, (feeRecipient, fee)));
+        }
+        emit Released(orderId, net, fee);
     }
     function refund(bytes32 orderId) external nonReentrant {
         Order storage order = orders[orderId];
