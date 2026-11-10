@@ -1,0 +1,50 @@
+import assert from 'node:assert/strict';
+import {readFileSync} from 'node:fs';
+import ganache from 'ganache';
+import solc from 'solc';
+import {BrowserProvider,ContractFactory,keccak256,toUtf8Bytes} from 'ethers';
+
+const file = name => readFileSync('contracts/'+name+'.sol','utf8');
+const input={language:'Solidity',sources:{
+ 'SovereignEscrow.sol':{content:file('SovereignEscrow')},
+ 'MockToken.sol':{content:file('MockToken')}
+},settings:{optimizer:{enabled:true,runs:200},outputSelection:{'*':{'*':['abi','evm.bytecode.object']}}}};
+const out=JSON.parse(solc.compile(JSON.stringify(input)));
+const errors=(out.errors||[]).filter(x=>x.severity==='error');
+assert.equal(errors.length,0,errors.map(x=>x.formattedMessage).join('\n'));
+const artifact=(source,name)=>out.contracts[source+'.sol'][name];
+const provider=new BrowserProvider(ganache.provider({logging:{quiet:true},wallet:{totalAccounts:4},chain:{chainId:1337}}));
+const [payer,providerSigner,attacker]=await Promise.all([provider.getSigner(0),provider.getSigner(1),provider.getSigner(2)]);
+const tokenArtifact=artifact('MockToken','MockToken');
+const token=await new ContractFactory(tokenArtifact.abi,'0x'+tokenArtifact.evm.bytecode.object,payer).deploy();
+await token.waitForDeployment();
+const escrowArtifact=artifact('SovereignEscrow','SovereignEscrow');
+const escrow=await new ContractFactory(escrowArtifact.abi,'0x'+escrowArtifact.evm.bytecode.object,payer).deploy(await token.getAddress());
+await escrow.waitForDeployment();
+await (await token.mint(await payer.getAddress(),10000000)).wait();
+await (await token.approve(await escrow.getAddress(),10000000)).wait();
+const block=await provider.getBlock('latest');
+const until=Number(block.timestamp)+7200;
+const digest=keccak256(toUtf8Bytes('reviewer-approved-result'));
+const order=keccak256(toUtf8Bytes('order-one'));
+let checks=0;
+const expectReject=async(p)=>{let denied=false;try{const tx=await p;await tx.wait()}catch{denied=true}assert(denied,'expected revert');checks++};
+await expectReject(escrow.connect(attacker).fund(order,await providerSigner.getAddress(),100,until,digest));
+await (await escrow.fund(order,await providerSigner.getAddress(),100,until,digest)).wait();checks++;
+assert.equal((await escrow.orders(order)).state,1n);checks++;
+await expectReject(escrow.fund(order,await providerSigner.getAddress(),100,until,digest));
+await expectReject(escrow.connect(attacker).release(order,digest));
+await expectReject(escrow.release(order,keccak256(toUtf8Bytes('wrong'))));
+await expectReject(escrow.refund(order));
+await (await escrow.release(order,digest)).wait();checks++;
+assert.equal(await token.balanceOf(await providerSigner.getAddress()),100n);checks++;
+await expectReject(escrow.release(order,digest));
+await expectReject(escrow.refund(order));
+const order2=keccak256(toUtf8Bytes('order-two'));
+await (await escrow.fund(order2,await providerSigner.getAddress(),250,until,digest)).wait();checks++;
+await provider.send('evm_increaseTime',[7201]);await provider.send('evm_mine',[]);checks++;
+await (await escrow.refund(order2)).wait();checks++;
+assert.equal((await escrow.orders(order2)).state,3n);checks++;
+await expectReject(escrow.release(order2,digest));
+assert.equal(await token.balanceOf(await escrow.getAddress()),0n);checks++;
+console.log('LOCAL EVM EXECUTION PASS',checks,'checks. Not testnet or real funds.');

@@ -1,0 +1,17 @@
+{
+  "name": "sovereign-l402-lab",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Local EVM escrow engineering candidate; no real fund activation",
+  "scripts": {
+    "contracts:compile": "node scripts/compile-contract.mjs",
+    "contracts:test": "node scripts/evm-local-test.mjs",
+    "python:test": "python3 -m unittest discover -s tests -q"
+  },
+  "devDependencies": {
+    "solc": "0.8.24",
+    "ethers": "6.15.0",
+    "ganache": "7.9.2"
+  }
+}
