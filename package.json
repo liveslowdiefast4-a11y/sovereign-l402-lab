@@ -7,7 +7,11 @@
   "scripts": {
     "contracts:compile": "node scripts/compile-contract.mjs",
     "contracts:test": "node scripts/evm-local-test.mjs",
-    "python:test": "python3 -m unittest discover -s tests -q"
+    "python:test": "python3 -m unittest discover -s tests -q",
+    "mainnet:preflight": "node scripts/mainnet-preflight.mjs",
+    "mainnet:path-audit": "node scripts/live-path-audit.mjs",
+    "security:test": "node --test scripts/mainnet-preflight.test.mjs scripts/runtime-integrity.test.mjs",
+    "local:acceptance": "node scripts/compile-contract.mjs && node scripts/evm-local-test.mjs && python3 -m unittest discover -s tests -q"
   },
   "devDependencies": {
     "solc": "0.8.24",

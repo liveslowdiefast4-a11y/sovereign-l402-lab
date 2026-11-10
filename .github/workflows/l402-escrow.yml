@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feat/sovereign402-gateway-20261106
+      - feat/financial-mechanisms-20261111
 permissions:
   contents: read
 jobs:
@@ -21,4 +22,5 @@ jobs:
       - run: npm install --ignore-scripts --no-audit --no-fund
       - run: npm run contracts:compile
       - run: npm run contracts:test
+      - run: npm run security:test
       - run: PYTHONWARNINGS=error::ResourceWarning python3 -m unittest discover -s tests -q

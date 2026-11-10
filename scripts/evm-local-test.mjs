@@ -3,6 +3,7 @@ import {readFileSync,writeFileSync,mkdirSync} from 'node:fs';
 import ganache from 'ganache';
 import solc from 'solc';
 import {BrowserProvider,ContractFactory,keccak256,toUtf8Bytes} from 'ethers';
+import {verifyPath} from './live-path-audit.mjs';
 
 const file = name => readFileSync('contracts/'+name+'.sol','utf8');
 const input={language:'Solidity',sources:{
@@ -61,7 +62,8 @@ assert.equal(await token.balanceOf(await feeSigner.getAddress()),100n);checks++;
 await expectReject(escrow.release(order,digest));
 await expectReject(escrow.refund(order));
 const order2=keccak256(toUtf8Bytes('order-two'));
-await (await escrow.fund(order2,await providerSigner.getAddress(),25000,until,digest)).wait();checks++;
+const refundFundTxn=await escrow.fund(order2,await providerSigner.getAddress(),25000,until,digest);
+const refundFundReceipt=await refundFundTxn.wait();checks++;
 await provider.send('evm_increaseTime',[7201]);await provider.send('evm_mine',[]);checks++;
 const refundTxn=await escrow.refund(order2);
 const refundReceipt=await refundTxn.wait();checks++;
@@ -79,4 +81,26 @@ writeFileSync('artifacts/escrow-payout-local.json',JSON.stringify({
   release:{orderId:order,receipt:formatReceipt(releaseReceipt),net:9900,fee:100},
   refund:{orderId:order2,receipt:formatReceipt(refundReceipt),amount:25000}
 },null,2));
+const auditInput={
+ provider, chainId:1337, minConfirmations:1,
+ ctx:{
+  escrow:await escrow.getAddress(),
+  token:await token.getAddress(),
+  payer:await payer.getAddress(),
+  provider:await providerSigner.getAddress(),
+  feeRecipient:await feeSigner.getAddress(),
+  feeBps:100
+ },
+ release:{id:order,commitment:digest,amount:'10000',
+          fundTx:depositReceipt.hash,terminalTx:releaseReceipt.hash},
+ refund:{id:order2,commitment:digest,amount:'25000',
+         fundTx:refundFundReceipt.hash,terminalTx:refundReceipt.hash}
+};
+const audited=await verifyPath(auditInput);
+assert.equal(audited.status,'HISTORICAL_PATH_REPRODUCED');
+await assert.rejects(verifyPath({...auditInput,minConfirmations:1000}));
+await assert.rejects(verifyPath({...auditInput,ctx:{...auditInput.ctx,provider:await attacker.getAddress()}}));
+await assert.rejects(verifyPath({...auditInput,refund:{...auditInput.refund,terminalTx:auditInput.release.terminalTx}}));
+assert.equal(audited.proofs.length,2);
+console.log('LOCAL END-TO-END PATH PASS: deposit, 1% fee release, expiry refund, chain receipts, final states');
 console.log('LOCAL EVM EXECUTION PASS',checks,'checks. Not testnet or real funds.');
