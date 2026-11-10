@@ -24,14 +24,21 @@ class Policy:
     token: str
     treasury: str
     fee_bps: int = 50
+    max_single_amount: int = 1_000_000_000
+    max_outstanding: int = 10_000_000_000
+    max_payout: int = 1_000_000_000
+    max_hourly_orders: int = 250
     def __post_init__(self):
         if type(self.chain_id) is not int or self.chain_id not in (84532, 421614):
             raise FinanceDenied("testnet only")
         from .evm_settlement import address
         address(self.token)
         address(self.treasury)
-        if type(self.fee_bps) is not int or not 0 <= self.fee_bps <= 150:
+        if type(self.fee_bps) is not int or not 10 <= self.fee_bps <= 150:
             raise FinanceDenied("invalid fee rate")
+        if any(type(x) is not int or x <= 0 or x > 2**63-1 for x in
+               (self.max_single_amount, self.max_outstanding, self.max_payout, self.max_hourly_orders)):
+            raise FinanceDenied("invalid risk limits")
 
 class FinancialLedger:
     """Unique settlement evidence -> escrow liability -> approved payout intent.
@@ -60,6 +67,11 @@ class FinancialLedger:
               created INTEGER NOT NULL,
               UNIQUE(chain_id,tx_hash)
             );
+            CREATE TABLE IF NOT EXISTS circuit_breaker (
+              id INTEGER PRIMARY KEY CHECK(id=1),
+              paused INTEGER NOT NULL CHECK(paused IN (0,1))
+            );
+            INSERT OR IGNORE INTO circuit_breaker VALUES(1,0);
             CREATE TABLE IF NOT EXISTS journal (
               seq INTEGER PRIMARY KEY AUTOINCREMENT,
               event TEXT NOT NULL,
@@ -109,6 +121,16 @@ class FinancialLedger:
         with self._db() as db:
             try:
                 db.execute("BEGIN IMMEDIATE")
+                self._check_breaker(db)
+                if amount > self.policy.max_single_amount:
+                    raise FinanceDenied("deposit amount exceeds cap")
+                outstanding=db.execute("""SELECT COALESCE(SUM(amount),0) FROM orders
+                  WHERE status IN ('HELD','RELEASE_PENDING','REFUND_PENDING')""").fetchone()[0]
+                if outstanding + amount > self.policy.max_outstanding:
+                    raise FinanceDenied("outstanding liability cap exceeded")
+                hourly=db.execute("SELECT COUNT(*) FROM orders WHERE created>=?",(int(time.time())-3600,)).fetchone()[0]
+                if hourly >= self.policy.max_hourly_orders:
+                    raise FinanceDenied("deposit velocity cap exceeded")
                 if db.execute("SELECT 1 FROM orders WHERE chain_id=? AND payout_tx=? LIMIT 1",
                               (self.policy.chain_id,tx_hash.lower())).fetchone():
                     raise FinanceDenied("settlement already used as payout")
@@ -137,7 +159,11 @@ class FinancialLedger:
                 row=db.execute("SELECT payer,status,amount,fee,liability,provider FROM orders WHERE id=?",(order_id,)).fetchone()
                 if not row or row[1]!="HELD" or address(actor)!=row[0]:
                     raise FinanceDenied("payer authorization or open escrow required")
+                self._check_breaker(db)
                 status="REFUND_PENDING" if refund else "RELEASE_PENDING"
+                amount_to_send=row[2] if refund else row[4]
+                if amount_to_send > self.policy.max_payout:
+                    raise FinanceDenied("payout cap exceeded")
                 db.execute("UPDATE orders SET status=?,decision_nonce=? WHERE id=?",(status,decision_nonce,order_id))
                 self._event(db,status,order_id,{"actor":actor.lower(),"decision_nonce":decision_nonce})
                 db.commit()
@@ -174,6 +200,7 @@ class FinancialLedger:
         with self._db() as db:
             try:
                 db.execute("BEGIN IMMEDIATE")
+                self._check_breaker(db)
                 current=db.execute("SELECT status FROM orders WHERE id=?",(order_id,)).fetchone()
                 if not current or current[0]!=status:
                     raise FinanceDenied("payout state changed concurrently")
@@ -192,6 +219,26 @@ class FinancialLedger:
                 raise
         return {"order_id":order_id,"status":completed,"settlement_tx":payout_tx_hash.lower(),
                 "confirmed_amount":due}
+
+    def _check_breaker(self, db):
+        row=db.execute("SELECT paused FROM circuit_breaker WHERE id=1").fetchone()
+        if not row or row[0]!=0:
+            raise FinanceDenied("circuit breaker active")
+
+    def emergency_pause(self):
+        """Operator-only local control. Never expose this unauthenticated."""
+        with self._db() as db:
+            try:
+                db.execute("BEGIN IMMEDIATE")
+                db.execute("UPDATE circuit_breaker SET paused=1 WHERE id=1")
+                self._event(db,"PAUSED","system",{"reason":"operator emergency stop"})
+                db.commit()
+            except BaseException:
+                db.rollback()
+                raise
+    def is_paused(self):
+        with self._db() as db:
+            return db.execute("SELECT paused FROM circuit_breaker WHERE id=1").fetchone()[0]==1
 
     def snapshot(self):
         with self._db() as db:

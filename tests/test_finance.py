@@ -82,5 +82,30 @@ class FinancialTests(unittest.TestCase):
         self.hold()
         other=FinancialLedger(self.ledger.path,self.ledger.policy)
         self.assertEqual(other.snapshot()[0]["gross"],10000)
+    def test_emergency_pause_blocks_deposits(self):
+        self.ledger.emergency_pause()
+        self.assertTrue(self.ledger.is_paused())
+        with self.assertRaises(FinanceDenied): self.hold()
+    def test_emergency_pause_blocks_payout(self):
+        self.hold()
+        self.ledger.emergency_pause()
+        with self.assertRaises(FinanceDenied):
+            self.ledger.request_disbursement("order-001",PAYER,"x"*24)
+    def test_deposit_cap(self):
+        self.ledger=FinancialLedger(self.ledger.path,
+             Policy(84532,TOKEN,TREASURY,100,max_single_amount=9999))
+        with self.assertRaises(FinanceDenied): self.hold()
+    def test_outstanding_cap(self):
+        self.ledger=FinancialLedger(self.ledger.path,
+             Policy(84532,TOKEN,TREASURY,100,max_outstanding=9999))
+        with self.assertRaises(FinanceDenied): self.hold()
+    def test_max_payout_cap(self):
+        self.ledger=FinancialLedger(self.ledger.path,
+             Policy(84532,TOKEN,TREASURY,100,max_payout=5000))
+        self.hold()
+        with self.assertRaises(FinanceDenied):
+            self.ledger.request_disbursement("order-001",PAYER,"x"*24)
+    def test_fee_below_ten_bps_blocked(self):
+        with self.assertRaises(FinanceDenied): Policy(84532,TOKEN,TREASURY,0)
     def test_mainnet_disallowed(self):
         with self.assertRaises(FinanceDenied):Policy(8453,TOKEN,TREASURY)
